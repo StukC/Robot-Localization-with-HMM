@@ -2,7 +2,7 @@ import numpy as np
 
 # Chase Stuk #8942 8283
 # Date Created: 3/22/2022
-# Date Last Modified: 3/26/2022
+# Date Last Modified: 3/28/2022
 
 height = 6
 width = 7
@@ -48,27 +48,6 @@ sequence = [[0, 0, 0, 1],
 # places open spaces
 open_spaces = [(x, y) for x in range(6) for y in range(7) if (x, y) not in obstacles]
 
-
-# move in direction
-def moveit(location, move):
-    global new_location
-    if move == 0:
-        new_location = (location[0], location[1] - 1)
-    elif move == 1:
-        new_location = (location[0] - 1, location[1])
-    elif move == 2:
-        new_location = (location[0], location[1] + 1)
-    elif move == 3:
-        new_location = (location[0] + 1, location[1])
-        # if new_location is out of bounds, return original location
-    if (new_location in obstacles  # move into obstacle
-            or new_location[0] <= -1 or new_location[0] >= height  # up or down
-            or new_location[1] <= -1 or new_location[1] >= width):  # left or right
-        return location[0], location[1]  # don't move
-    else:
-        return new_location  # new location
-
-
 # returns probability
 def evidence_probability(evidence, location):
     prob = 1  # prob to return
@@ -94,6 +73,25 @@ def evidence_probability(evidence, location):
 
     return prob  # return result
 
+# move in direction
+def moveit(location, move):
+    global new_location
+    if move == 0:
+        new_location = (location[0], location[1] - 1)
+    elif move == 1:
+        new_location = (location[0] - 1, location[1])
+    elif move == 2:
+        new_location = (location[0], location[1] + 1)
+    elif move == 3:
+        new_location = (location[0] + 1, location[1])
+        # if new_location is out of bounds, return original location
+    if (new_location in obstacles  # if new location is an obstacle
+            or new_location[0] <= -1 or new_location[0] >= height
+            or new_location[1] <= -1 or new_location[1] >= width):
+        return location[0], location[1]  # don't move
+    else:
+        return new_location  # new location
+
 
 def transitional_probability(move, action):
     # move in intended direction
@@ -111,25 +109,11 @@ def transitional_probability(move, action):
             (state_clockwise, drift_prob))
 
 
-# displays distribution
-def display(distribution):
-    for row in distribution:
-        for cell in row:
-            if cell < 0.0000000001:
-                print('####    ', end='')
-            else:  # print out probability
-                if len("{prob:.2f}".format(prob=cell * 100)) == 7:  # if probability is less than 1%
-                    print("{prob:.2f}   ".format(prob=cell * 100), end='')  # print out probability
-                else:
-                    print("{prob:.2f}    ".format(prob=cell * 100), end='')
-        print()
-
-
 # sensing update
 def filtering(action, evidence):
     for os in open_spaces:  # iterate through open spaces
-        action[os[0], os[1]] *= evidence_probability(evidence, os)  # calculate
-    action /= np.sum(action)  # returns P(S | Si, a)
+        action[os[0], os[1]] *= evidence_probability(evidence, os)
+    action /= np.sum(action)  # normalize
 
 
 # motion update
@@ -141,17 +125,29 @@ def prediction(num, action):
     return new_num  # update distribution
 
 
-# backward pass
+
 def backward(dist, evidence, action):
-    new_dist = np.zeros((height, width), np.float64)
+    new_dist = np.zeros((height, width), np.float64) # array of 0's
     for os in open_spaces:
         for (state, prob) in transitional_probability(os, action):
             # add on term for total probability
-            # value += recursive probability * evidence prob * transition prob
             new_dist[os[0], os[1]] += dist[state[0], state[1]] * evidence_probability(evidence, state) * prob
     # normalize
     new_dist /= np.sum(new_dist)
     return new_dist
+
+# displays distribution
+def display(distribution):
+    for row in distribution:
+        for cell in row:
+            if cell < 0.0000000001:
+                print('####    ', end='')
+            else:  # print out probability
+                if len("{prob:.2f}".format(prob=cell * 100)) == 7:  # if probability is less than 1%
+                    print("{prob:.2f}   ".format(prob=cell * 100), end='')  # print out probability
+                else:
+                    print("{prob:.2f}    ".format(prob=cell * 100), end='') # print out probability
+        print()
 
 
 # distribution initialization
@@ -202,9 +198,3 @@ while len(sequence) != 0:
         actions.append(num)
 
     print()
-
-for i in range(len(forward_dist) - 2, -1, -1):
-    next_backward_dist = backward(backwards_distribution[0], forward_evidence[i + 1], actions[i])  # backward pass
-    backwards_distribution.insert(0, next_backward_dist)  # insert distribution
-    smooth = np.multiply(forward_dist[i], next_backward_dist)  # smooth
-    smooth /= np.sum(smooth)
