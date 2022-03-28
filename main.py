@@ -48,6 +48,8 @@ sequence = [[0, 0, 0, 1],
 # places open spaces
 open_spaces = [(x, y) for x in range(6) for y in range(7) if (x, y) not in obstacles]
 
+
+# move in direction
 def moveit(location, move):
     global new_location
     if move == 0:
@@ -58,7 +60,7 @@ def moveit(location, move):
         new_location = (location[0], location[1] + 1)
     elif move == 3:
         new_location = (location[0] + 1, location[1])
-
+        # if new_location is out of bounds, return original location
     if (new_location in obstacles  # move into obstacle
             or new_location[0] <= -1 or new_location[0] >= height  # up or down
             or new_location[1] <= -1 or new_location[1] >= width):  # left or right
@@ -93,7 +95,6 @@ def evidence_probability(evidence, location):
     return prob  # return result
 
 
-# returns P(Si+1 | Si, a)
 def transitional_probability(move, action):
     # move in intended direction
     move_forward = moveit(move, action)
@@ -114,11 +115,11 @@ def transitional_probability(move, action):
 def display(distribution):
     for row in distribution:
         for cell in row:
-            if cell < 1e-8:
+            if cell < 0.0000000001:
                 print('####    ', end='')
-            else:
-                if len("{prob:.2f}".format(prob=cell * 100)) == 7:
-                    print("{prob:.2f}   ".format(prob=cell * 100), end='')
+            else:  # print out probability
+                if len("{prob:.2f}".format(prob=cell * 100)) == 7:  # if probability is less than 1%
+                    print("{prob:.2f}   ".format(prob=cell * 100), end='')  # print out probability
                 else:
                     print("{prob:.2f}    ".format(prob=cell * 100), end='')
         print()
@@ -128,17 +129,15 @@ def display(distribution):
 def filtering(action, evidence):
     for os in open_spaces:  # iterate through open spaces
         action[os[0], os[1]] *= evidence_probability(evidence, os)  # calculate
-    action /= np.sum(action)  # calculate p1/(p....)/(p...)
+    action /= np.sum(action)  # returns P(S | Si, a)
 
 
 # motion update
 def prediction(num, action):
     new_num = np.zeros((height, width), np.float64)  # numpy array of zeros
     for os in open_spaces:  # iterate though open spaces
-        for (state, prob) in transitional_probability(os, action):  # iterate though spaces we can travel to
-            # add on term for total probability
-            # dist[os[0], os[1]] is a result from the last round of filtering
-            new_num[state[0], state[1]] += prob * num[os[0], os[1]]
+        for (state, prob) in transitional_probability(os, action):  # iterate through states
+            new_num[state[0], state[1]] += prob * num[os[0], os[1]]  # add on term for total probability
     return new_num  # update distribution
 
 
@@ -166,14 +165,14 @@ backwards_distribution = [np.ones((height, width), np.float64)]
 
 # create list
 for _ in range(6):
-    distribution.append([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    distribution.append([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])  # append list
 
 distribution = np.array(distribution)  # create numpy array
 initial_probability = 1.0 / len(open_spaces)  # equal likelihood
 
 # iterate through open spaces
 for os in open_spaces:
-    distribution[os[0], os[1]] = initial_probability
+    distribution[os[0], os[1]] = initial_probability  # set equal likelihood
 
 print('Initial Location Probabilities')
 display(distribution)
@@ -192,20 +191,20 @@ while len(sequence) != 0:
         new_dist = np.zeros((height, width), np.float64)
         for os in open_spaces:
             new_dist[os[0], os[1]] = distribution[os[0], os[1]]
-        forward_dist.append(new_dist)
-        forward_evidence.append(evidence)
+        forward_dist.append(new_dist)  # append distribution
+        forward_evidence.append(evidence)  # append evidence
     else:
         sequence_item = 'evidence'
         num = sequence.pop(0)
         distribution = prediction(distribution, num)
-        print('Prediction after Action ' + ('E' if num == 2 else 'N'))
+        print('Prediction after Action ' + ('E' if num == 2 else 'N'))  # print action
         display(distribution)
         actions.append(num)
 
     print()
 
 for i in range(len(forward_dist) - 2, -1, -1):
-    next_backward_dist = backward(backwards_distribution[0], forward_evidence[i + 1], actions[i])
-    backwards_distribution.insert(0, next_backward_dist)
-    smooth = np.multiply(forward_dist[i], next_backward_dist)
+    next_backward_dist = backward(backwards_distribution[0], forward_evidence[i + 1], actions[i])  # backward pass
+    backwards_distribution.insert(0, next_backward_dist)  # insert distribution
+    smooth = np.multiply(forward_dist[i], next_backward_dist)  # smooth
     smooth /= np.sum(smooth)
